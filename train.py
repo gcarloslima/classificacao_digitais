@@ -7,7 +7,7 @@ from tqdm import tqdm
 from torch import nn, optim
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from sklearn.metrics import f1_score, confusion_matrix, precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score, classification_report
 
 from config import *
 from dataset import FingerprintDataset
@@ -15,7 +15,6 @@ from model import SimpleFingerprintClassifier
 from colorlog import ColoredFormatter
 
 import warnings
-
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # Setup logging
@@ -27,15 +26,13 @@ logging.basicConfig(
     filemode='w'
 )
 
-# Define formato colorido para o terminal
 color_formatter = ColoredFormatter(
     "%(log_color)s%(asctime)s [%(levelname)s] %(message)s",
-    datefmt=None,
     log_colors={
-        'DEBUG':    'cyan',
-        'INFO':     'green',
-        'WARNING':  'yellow',
-        'ERROR':    'red',
+        'DEBUG': 'cyan',
+        'INFO': 'green',
+        'WARNING': 'yellow',
+        'ERROR': 'red',
         'CRITICAL': 'bold_red',
     }
 )
@@ -59,25 +56,12 @@ def get_dataloaders():
     return train_loader, val_loader, train_set.classes
 
 
-def compute_metrics(y_true, y_pred, num_classes):
-    f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
-    precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
-    recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
-
-    cm = confusion_matrix(y_true, y_pred, labels=list(range(num_classes)))
-    TP = cm.diagonal().sum()
-    FP = cm.sum(axis=0) - cm.diagonal()
-    FN = cm.sum(axis=1) - cm.diagonal()
-    TN = cm.sum() - (FP + FN + TP)
-
+def compute_metrics(y_true, y_pred):
     return {
-        "f1_score": f1,
-        "precision": precision,
-        "recall": recall,
-        "TP": TP,
-        "FP": FP.sum(),
-        "FN": FN.sum(),
-        "TN": TN.sum()
+        "f1_score": f1_score(y_true, y_pred, average='weighted', zero_division=0),
+        "precision": precision_score(y_true, y_pred, average='weighted', zero_division=0),
+        "recall": recall_score(y_true, y_pred, average='weighted', zero_division=0),
+        # "report": classification_report(y_true, y_pred, zero_division=0)  # opcional
     }
 
 
@@ -92,14 +76,15 @@ def train_model():
 
     train_losses, val_losses = [], []
     best_f1 = 0.0
+    best_model_state = None
     best_epoch = 0
 
     for epoch in range(NUM_EPOCHS):
-        logging.info(f"Epoch {epoch+1}/{NUM_EPOCHS}")
+        logging.info(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
         model.train()
         total_train_loss = 0
 
-        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1} - Training"):
+        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1} - Training"):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
             optimizer.zero_grad()
             outputs = model(images)
@@ -111,7 +96,6 @@ def train_model():
         train_loss = total_train_loss / len(train_loader)
         train_losses.append(train_loss)
 
-        # Validation
         model.eval()
         total_val_loss = 0
         all_preds, all_labels = [], []
@@ -130,26 +114,27 @@ def train_model():
         val_loss = total_val_loss / len(val_loader)
         val_losses.append(val_loss)
 
-        metrics = compute_metrics(all_labels, all_preds, num_classes)
+        metrics = compute_metrics(all_labels, all_preds)
 
         logging.info(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-        logging.info(f"F1 Score: {metrics['f1_score']:.4f} | Precision: {metrics['precision']:.4f} | Recall: {metrics['recall']:.4f}")
-        logging.info(f"TP: {metrics['TP']} | TN: {metrics['TN']} | FP: {metrics['FP']} | FN: {metrics['FN']}")
-        
+        logging.info(
+            f"F1 Score: {metrics['f1_score']:.4f} | Precision: {metrics['precision']:.4f} | Recall: {metrics['recall']:.4f}"
+        )
+
+        # logging.info(f"Classification Report:\n{metrics['report']}")  # se quiser ver o detalhado por classe
+
         if metrics['f1_score'] > best_f1:
             best_f1 = metrics['f1_score']
             best_model_state = model.state_dict()
             best_epoch = epoch + 1
+            os.makedirs("saved_models", exist_ok=True)
             torch.save(best_model_state, BEST_MODEL_PATH)
             logging.info(f"Novo melhor modelo salvo (Epoch {best_epoch}) com F1 Score: {best_f1:.4f}")
-    
-    # Save model
-    os.makedirs("saved_models", exist_ok=True)
-    torch.save(model.state_dict(), MODEL_PATH)
-    logging.info(f"Modelo salvo em {MODEL_PATH}")
-    logging.info(f"Melhor modelo foi salvo na época {best_epoch} com F1 Score: {best_f1:.4f}")
 
-    # Plot losses
+    torch.save(model.state_dict(), MODEL_PATH)
+    logging.info(f"Último modelo salvo em {MODEL_PATH}")
+    logging.info(f"Melhor modelo salvo em {BEST_MODEL_PATH} na época {best_epoch} com F1 Score: {best_f1:.4f}")
+
     plt.figure()
     plt.plot(train_losses, label='Train Loss')
     plt.plot(val_losses, label='Val Loss')
