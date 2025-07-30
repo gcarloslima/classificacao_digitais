@@ -1,4 +1,11 @@
-# train_model.py
+"""
+Script principal para iniciar o treinamento do modelo.
+
+Este módulo é o ponto de entrada para executar o treinamento do modelo
+de classificação de impressões digitais. Ele importa e executa a função
+de treinamento principal, exibindo mensagens informativas sobre o progresso.
+"""
+
 from train import train_model
 
 if __name__ == "__main__":

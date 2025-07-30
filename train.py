@@ -1,20 +1,36 @@
-# train.py
-import os
-import torch
+"""
+Módulo principal de treinamento do modelo de classificação de impressões digitais.
+
+Este módulo contém toda a lógica de treinamento, incluindo:
+- Carregamento e preparação dos dados
+- Configuração do modelo e otimizador
+- Loop de treinamento com validação
+- Cálculo de métricas de avaliação
+- Salvamento dos melhores modelos
+- Geração de logs e gráficos de perda
+
+O treinamento utiliza validação cruzada para monitorar o desempenho
+e salva automaticamente o melhor modelo baseado no F1-score.
+"""
+
 import logging
+import os
+import warnings
+
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+import torch
+import torchvision.transforms as transforms
+from colorlog import ColoredFormatter
+from sklearn.metrics import f1_score, precision_score, recall_score
 from torch import nn, optim
 from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
-from sklearn.metrics import f1_score, precision_score, recall_score, classification_report
+from tqdm import tqdm
 
-from config import *
+from config import (BATCH_SIZE, BEST_MODEL_PATH, DEVICE, IMAGE_SIZE,
+                    LEARNING_RATE, MODEL_PATH, NUM_EPOCHS, TRAIN_DIR, VAL_DIR)
 from dataset import FingerprintDataset
 from model import SimpleFingerprintClassifier
-from colorlog import ColoredFormatter
 
-import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # Setup logging
@@ -44,6 +60,19 @@ logging.getLogger('').addHandler(console)
 
 
 def get_dataloaders():
+    """
+    Cria e retorna os DataLoaders para treinamento e validação.
+    
+    Aplica transformações apropriadas nas imagens (redimensionamento e
+    conversão para tensor) e cria os DataLoaders com o tamanho de batch
+    especificado nas configurações.
+    
+    Returns:
+        tuple: (train_loader, val_loader, class_names) onde:
+            - train_loader: DataLoader para dados de treinamento
+            - val_loader: DataLoader para dados de validação  
+            - class_names: Lista com nomes das classes
+    """
     transform = transforms.Compose([
         transforms.Resize(IMAGE_SIZE),
         transforms.ToTensor()
@@ -57,15 +86,36 @@ def get_dataloaders():
 
 
 def compute_metrics(y_true, y_pred):
+    """
+    Calcula métricas de avaliação para classificação.
+    
+    Args:
+        y_true (array-like): Rótulos verdadeiros
+        y_pred (array-like): Predições do modelo
+        
+    Returns:
+        dict: Dicionário contendo F1-score, precisão e recall médios ponderados
+    """
     return {
         "f1_score": f1_score(y_true, y_pred, average='weighted', zero_division=0),
         "precision": precision_score(y_true, y_pred, average='weighted', zero_division=0),
-        "recall": recall_score(y_true, y_pred, average='weighted', zero_division=0),
-        # "report": classification_report(y_true, y_pred, zero_division=0)  # opcional
+        "recall": recall_score(y_true, y_pred, average='weighted', zero_division=0)
     }
 
 
 def train_model():
+    """
+    Função principal de treinamento do modelo.
+    
+    Executa o loop completo de treinamento incluindo:
+    - Inicialização do modelo, otimizador e função de perda
+    - Treinamento por épocas com validação
+    - Monitoramento de métricas e salvamento do melhor modelo
+    - Geração de logs detalhados e gráfico de perda
+    
+    Returns:
+        tuple: (modelo_treinado, nomes_das_classes)
+    """
     logging.info("Iniciando treinamento...")
     train_loader, val_loader, class_names = get_dataloaders()
     num_classes = len(class_names)
@@ -80,10 +130,11 @@ def train_model():
     best_epoch = 0
 
     for epoch in range(NUM_EPOCHS):
-        logging.info(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
+        logging.info("Epoch %d/%d", epoch + 1, NUM_EPOCHS)
         model.train()
         total_train_loss = 0
 
+        # Loop de treinamento
         for images, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1} - Training"):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
             optimizer.zero_grad()
@@ -96,6 +147,7 @@ def train_model():
         train_loss = total_train_loss / len(train_loader)
         train_losses.append(train_loss)
 
+        # Loop de validação
         model.eval()
         total_val_loss = 0
         all_preds, all_labels = [], []
@@ -116,24 +168,24 @@ def train_model():
 
         metrics = compute_metrics(all_labels, all_preds)
 
-        logging.info(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        logging.info("Train Loss: %.4f | Val Loss: %.4f", train_loss, val_loss)
         logging.info(
-            f"F1 Score: {metrics['f1_score']:.4f} | Precision: {metrics['precision']:.4f} | Recall: {metrics['recall']:.4f}"
+            "F1 Score: %.4f | Precision: %.4f | Recall: %.4f",
+            metrics['f1_score'], metrics['precision'], metrics['recall']
         )
-
-        # logging.info(f"Classification Report:\n{metrics['report']}")  # se quiser ver o detalhado por classe
-
+        
+        # Salva o melhor modelo baseado no F1-score
         if metrics['f1_score'] > best_f1:
             best_f1 = metrics['f1_score']
             best_model_state = model.state_dict()
             best_epoch = epoch + 1
             os.makedirs("saved_models", exist_ok=True)
             torch.save(best_model_state, BEST_MODEL_PATH)
-            logging.info(f"Novo melhor modelo salvo (Epoch {best_epoch}) com F1 Score: {best_f1:.4f}")
+            logging.info("Novo melhor modelo salvo (Epoch %d) com F1 Score: %.4f", best_epoch, best_f1)
 
     torch.save(model.state_dict(), MODEL_PATH)
-    logging.info(f"Último modelo salvo em {MODEL_PATH}")
-    logging.info(f"Melhor modelo salvo em {BEST_MODEL_PATH} na época {best_epoch} com F1 Score: {best_f1:.4f}")
+    logging.info("Último modelo salvo em %s", MODEL_PATH)
+    logging.info("Melhor modelo salvo em %s na época %d com F1 Score: %.4f", BEST_MODEL_PATH, best_epoch, best_f1)
 
     plt.figure()
     plt.plot(train_losses, label='Train Loss')
