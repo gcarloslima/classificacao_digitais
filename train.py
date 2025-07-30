@@ -49,9 +49,6 @@ logging.getLogger('').addHandler(console)
 def get_dataloaders():
     transform = transforms.Compose([
         transforms.Resize(IMAGE_SIZE),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(10),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2),
         transforms.ToTensor()
     ])
     train_set = FingerprintDataset(TRAIN_DIR, transform)
