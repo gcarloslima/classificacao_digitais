@@ -14,8 +14,8 @@ from dataset import FingerprintDataset
 from utils import load_model, preprocess_image
 
 # Carrega classes e modelo treinado
-dummy_dataset = FingerprintDataset(TRAIN_DIR)
-class_names = dummy_dataset.classes
+classes_dataset = FingerprintDataset(TRAIN_DIR)
+class_names = classes_dataset.classes
 model = load_model(len(class_names))
 
 
