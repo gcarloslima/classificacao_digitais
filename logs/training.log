@@ -1,0 +1,10 @@
+2025-07-29 21:38:50,865 [INFO] Iniciando treinamento...
+2025-07-29 21:38:50,948 [INFO] Loading pretrained weights from Hugging Face hub (timm/efficientnet_b0.ra_in1k)
+2025-07-29 21:38:52,088 [INFO] [timm/efficientnet_b0.ra_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2025-07-29 21:38:52,106 [INFO] Missing keys (classifier.weight, classifier.bias) discovered while loading pretrained weights. This is expected if model is being adapted.
+2025-07-29 21:38:52,117 [INFO] Epoch 1/30
+2025-07-29 21:39:39,454 [INFO] Train Loss: 3.8561 | Val Loss: 2.9722
+2025-07-29 21:39:39,455 [INFO] F1 Score: 0.2577 | Precision: 0.2398 | Recall: 0.3250
+2025-07-29 21:39:39,455 [INFO] TP: 39 | TN: 9558 | FP: 81 | FN: 81
+2025-07-29 21:39:39,499 [INFO] Novo melhor modelo salvo (Epoch 1) com F1 Score: 0.2577
+2025-07-29 21:39:39,499 [INFO] Epoch 2/30
